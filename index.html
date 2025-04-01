@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Command Console</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+        }
+        
+        h1 {
+            color: #4CAF50;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .control-panel {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        #command {
+            flex-grow: 1;
+            padding: 10px;
+            background-color: #2d2d2d;
+            border: 1px solid #3e3e3e;
+            color: #e0e0e0;
+            border-radius: 4px;
+            text-transform: lowercase;
+        }
+        
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        button:disabled {
+            background-color: #666;
+            cursor: not-allowed;
+        }
+        
+        #clear-btn {
+            background-color: #f44336;
+        }
+        
+        #clear-btn:hover {
+            background-color: #d32f2f;
+        }
+        
+        #logs {
+            background-color: #252525;
+            padding: 15px;
+            border-radius: 4px;
+            height: 500px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            border: 1px solid #3e3e3e;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .status {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .command-line {
+            color: #4CAF50;
+            margin-bottom: 5px;
+        }
+        
+        .output {
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Command Console</h1>
+    
+    <div class="control-panel">
+        <input type="text" id="command" placeholder="Enter command (e.g., 'ls -la')" autocomplete="off">
+        <button id="send-btn">Execute</button>
+        <button id="clear-btn">Clear Logs</button>
+    </div>
+    
+    <div id="logs"></div>
+    
+    <div class="status" id="status">
+        Ready. Type a command and press Enter or click Execute.
+    </div>
+
+    <script>
+        const socket = io();
+        const commandInput = document.getElementById('command');
+        const logsElement = document.getElementById('logs');
+        const statusElement = document.getElementById('status');
+        const sendButton = document.getElementById('send-btn');
+        const clearButton = document.getElementById('clear-btn');
+        
+        // Focus the command input on page load
+        commandInput.focus();
+        
+        // Force lowercase input
+        commandInput.addEventListener('input', function() {
+            this.value = this.value.toLowerCase();
+        });
+        
+        // Handle Enter key press
+        commandInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                executeCommand();
+            }
+        });
+        
+        // Button event listeners
+        sendButton.addEventListener('click', executeCommand);
+        clearButton.addEventListener('click', clearLogs);
+        
+        function executeCommand() {
+            const cmd = commandInput.value.trim();
+            
+            if (!cmd) {
+                statusElement.textContent = "Please enter a command";
+                return;
+            }
+            
+            // Disable button during execution
+            sendButton.disabled = true;
+            statusElement.textContent = `Executing: ${cmd}`;
+            
+            // Add command to logs
+            addToLogs(`$ ${cmd}`, 'command-line');
+            
+            socket.emit("command", cmd);
+            
+            // Re-enable button after a short delay (in case server doesn't respond)
+            setTimeout(() => {
+                sendButton.disabled = false;
+                commandInput.value = '';
+                commandInput.focus();
+            }, 1000);
+        }
+        
+        function clearLogs() {
+            logsElement.innerHTML = '';
+            statusElement.textContent = "Logs cleared.";
+        }
+        
+        function addToLogs(content, className = '') {
+            const div = document.createElement('div');
+            if (className) div.className = className;
+            div.textContent = content;
+            logsElement.appendChild(div);
+            logsElement.scrollTop = logsElement.scrollHeight;
+        }
+        
+        socket.on("log", (data) => {
+            addToLogs(data, 'output');
+            // Re-enable button when we receive output
+            sendButton.disabled = false;
+            statusElement.textContent = "Command executed. Enter another command.";
+        });
+        
+        socket.on("connect", () => {
+            statusElement.textContent = "Connected to server.";
+        });
+        
+        socket.on("disconnect", () => {
+            statusElement.textContent = "Disconnected from server. Attempting to reconnect...";
+        });
+    </script>
+</body>
+</html>
